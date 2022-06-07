@@ -16,7 +16,7 @@ Manual limits set on buy orders are still respected as before. Sell order behavi
 
 ## Config
 
-There are no config properties at present for this mod.
+There is a single config setting called "Enable Profiling" which defaults to false. When set to true, the server console will print a report every 30 seconds (but only if anything interesting happened in the last 30 seconds) containing profiling data for the order limiting logic. This should help rule out this mod, or indeed the opposite if it's causing issues, if your server experiences lag after installation.
 
 ## Building Mod from Source
 
