@@ -1,5 +1,5 @@
 # Eco Better Buy Orders
-A server mod for Eco 9.5 that changes buy orders in stores to consider inventory limits.
+A server mod for Eco 9.5 that changes buy orders in stores to consider inventory and financial limits.
 
 ## Installation
 1. Download `EcoBetterBuyOrdersMod.dll` from the [latest release](https://github.com/thomasfn/EcoBetterBuyOrdersMod/releases).
@@ -8,7 +8,11 @@ A server mod for Eco 9.5 that changes buy orders in stores to consider inventory
 
 ## Usage
 
-The mod will begin working automatically when installed. It can safely be added to existing saves or removed at any time. Manual limits set on buy orders are still considered - the only difference is if the linked output inventories do not have enough space to store the requested quantity of item, the buy order will be automatically reduced to fit. 
+The mod will begin working automatically when installed. It can safely be added to existing saves or removed at any time. Any buy orders on stores will be automatically limited in the following situations:
+- If the linked output inventories do not have enough space to store the requested quantity of the order
+- If the linked bank account does not have enough currency to purchase the requested quantity of the order
+
+Manual limits set on buy orders are still respected as before. Sell order behaviour is not changed.
 
 ## Config
 

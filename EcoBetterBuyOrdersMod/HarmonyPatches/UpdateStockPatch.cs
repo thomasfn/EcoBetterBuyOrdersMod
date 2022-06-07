@@ -35,15 +35,15 @@ namespace Eco.Mods.BetterBuyOrders.HarmonyPatches
             var DepositInventories = depositInventoriesProperty.GetValue(__instance) as IEnumerable<Inventory>;
             var StoreData = __instance.StoreData;
 
-            // Original impl of UpdateStock with some slight tweaks to cache stock levels for later
             profilingTimer.Reset();
             profilingTimer.Start();
-            var stockStacks = StockInventories.AllStacks().AsList();
-            var stockStock = CalculateStock(stockStacks);
-            var depositStacks = DepositInventories.AllStacks().AsList();
-            var depositStock = CalculateStock(depositStacks);
-            try
+
+            // Original impl of UpdateStock (more or less)
             {
+                var stockStacks = StockInventories.AllStacks().AsList();
+                var stockStock = CalculateStock(stockStacks);
+                var depositStacks = DepositInventories.AllStacks().AsList();
+                var depositStock = CalculateStock(depositStacks);
                 foreach (var offer in StoreData.SellOffers)
                 {
                     // If it's a durability item, only count items that meet the req
@@ -57,54 +57,54 @@ namespace Eco.Mods.BetterBuyOrders.HarmonyPatches
                 {
                     offer.Stack.Modify(offer.ShouldLimit ? Math.Max(0, offer.Limit - depositStock.GetOrDefault(offer.Stack.Item?.Type)) : 999);
                 }
+            }
+            TimeSpan afterOriginalCheckpoint = profilingTimer.Elapsed;
 
-            }
-            finally
-            {
-                profilingTimer.Stop();
-            }
-            TimeSpan originalTime = profilingTimer.Elapsed;
+            // Modded logic to limit buy orders
+            LimitBuyOrdersBySpaceAvailable(StoreData, DepositInventories);
+            TimeSpan afterLimitBySpace = profilingTimer.Elapsed;
+            LimitBuyOrdersByCurrencyAvailable(StoreData, __instance.Balance);
+            TimeSpan afterLimitByCurrency = profilingTimer.Elapsed;
 
-            // Modded logic to amend buy orders
-            profilingTimer.Reset();
-            profilingTimer.Start();
-            try
-            {
-                foreach (var offer in StoreData.BuyOffers)
-                {
-                    if (offer.Stack.Item == null) { continue; }
-                    // TODO: Pass the store owner user in instead of null, see what happens
-                    int space = GetSpace(DepositInventories, offer.Stack.Item, null);
-                    if (space < offer.Stack.Quantity)
-                    {
-                        offer.Stack.Modify(space);
-                    }
-                }
-            }
-            finally
-            {
-                profilingTimer.Stop();
-            }
-            TimeSpan moddedTime = profilingTimer.Elapsed;
-
-            // Final call to EconomyTracker.UpdateStore
-            profilingTimer.Reset();
-            profilingTimer.Start();
-            try
-            {
-                EconomyTracker.UpdateStore(__instance, !initializing);
-            }
-            finally
-            {
-                profilingTimer.Stop();
-            }
-            TimeSpan updateStoreTime = profilingTimer.Elapsed;
+            // Final original call to EconomyTracker
+            EconomyTracker.UpdateStore(__instance, !initializing);
+            TimeSpan afterUpdateStore = profilingTimer.Elapsed;
+            profilingTimer.Stop();
 
             // Log profiling data
-            Logger.Debug($"StoreComponent.UpdateStock: original={originalTime.TotalMilliseconds:N} ms, modded={moddedTime.TotalMilliseconds:N} ms, updateStore={updateStoreTime.TotalMilliseconds:N} ms");
+            if (BetterBuyOrdersPlugin.Obj.Config.EnableProfiling)
+            {
+                BetterBuyOrdersPlugin.Obj.ReportUpdateStockRun(afterOriginalCheckpoint, afterLimitBySpace - afterOriginalCheckpoint, afterLimitByCurrency - afterLimitBySpace, afterUpdateStore - afterLimitByCurrency, DepositInventories.Count());
+            }
 
             // Skip original
             return false;
+        }
+
+        private static void LimitBuyOrdersBySpaceAvailable(StoreItemData storeData, IEnumerable<Inventory> depositInventories)
+        {
+            foreach (var offer in storeData.BuyOffers)
+            {
+                if (offer.Stack.Item == null) { continue; }
+                // TODO: Pass the store owner user in instead of null, see what happens?
+                int space = GetSpace(depositInventories, offer.Stack.Item, null);
+                if (space < offer.Stack.Quantity)
+                {
+                    offer.Stack.Modify(space);
+                }
+            }
+        }
+
+        private static void LimitBuyOrdersByCurrencyAvailable(StoreItemData storeData, float balance)
+        {
+            foreach (var offer in storeData.BuyOffers)
+            {
+                if (offer.Stack.Item == null) { continue; }
+                var totalCost = offer.Stack.Quantity * offer.Price;
+                if (totalCost <= balance) { continue; }
+                int amountCanAfford = (int)(balance / offer.Price);
+                offer.Stack.Modify(amountCanAfford);
+            }
         }
 
         private static int GetSpace(IEnumerable<Inventory> inventories, Item item, User depositor = null)
@@ -129,5 +129,7 @@ namespace Eco.Mods.BetterBuyOrders.HarmonyPatches
             var dict = groups.Where(g => g.Key != null).ToDictionary(group => group.Key, group => group.Sum(stack => stack.Quantity));
             return dict;
         }
+    
+        
     }
 }
